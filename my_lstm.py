@@ -33,7 +33,7 @@ N_HIDDEN = 512
 # Optimization learning rate
 LEARNING_RATE = .01
 
-dataset_path = 'G:\_nir\\lstm_test'
+dataset_path = '.\\test_building_train_data_small_15'
 #dataset_path = 'C:\Diploma\with_usefull_features\\test'
 SENTENCE_ID = 0
 LEX = 3
@@ -420,9 +420,11 @@ class MaltParser:
 
 		# work with network
 		print("Building network ...")
-   
+
+   		help(lasagne.layers.LSTMLayer)
+
    		#input_var = theano.sparse.csr_matrix(name='inputs', dtype='int16')
-	 	input_var = T.matrix('inputs')
+	 	input_var = T.tensor3('inputs')
 	 	target_var = T.matrix('targets')
 	 	train_matrix = self.train_samples.todense()
 	 	print train_matrix.shape[0], train_matrix.shape[1], 'SHAPEEE'
@@ -430,21 +432,23 @@ class MaltParser:
 	 	#self.train_answers = T.ivector('target_output')
 
 	 	# (batch size, SEQ_LENGTH, num_features)
-	 	l_in = lasagne.layers.InputLayer(shape=(1, train_matrix.shape[1]), input_var=input_var)
+	 	l_in = lasagne.layers.InputLayer(shape=(1, 1, train_matrix.shape[1]), input_var=input_var)
 	 	l_in_drop = lasagne.layers.DropoutLayer(l_in, p=0.3)
 
+
 		#W = np.arange(3*train_matrix.shape[1]).reshape((3, 1, train_matrix.shape[1])).astype('float32')
-		#l_resized = lasagne.layers.ReshapeLayer(l_in_drop, (1, train_matrix.shape[1], None), output_size=3, W=W)
+		#l_resized = lasagne.layers.ReshapeLayer(l_in_drop, shape=(-1, 1))
 
 	 	# We clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients. 
-	 	l_forward_1 = lasagne.layers.LSTMLayer(l_in_drop, N_HIDDEN, grad_clipping=GRAD_CLIP,nonlinearity=lasagne.nonlinearities.tanh)
+	 	l_forward_1 = lasagne.layers.LSTMLayer(l_in_drop, 4, grad_clipping=GRAD_CLIP,nonlinearity=lasagne.nonlinearities.tanh)
 
+		#l_resized = lasagne.layers.ReshapeLayer(l_forward_1, shape=(-1, 1))
 	 	'''l_forward_2 = lasagne.layers.LSTMLayer(
 	 	 	l_forward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
 	 	 	nonlinearity=lasagne.nonlinearities.tanh)'''
 
 	 	# The l_forward layer creates an output of dimension (batch_size, SEQ_LENGTH, N_HIDDEN)
-	 	# Since we are only interested in the final prediction, we isolate that quantity and feed it to the next layer. 
+	 	# Since we are only interested in the final prediction, we isolate that quantity and feed it to the next layer.
 	 	# The output of the sliced layer will then be of size (batch_size, N_HIDDEN)
 	 	#l_forward_slice = lasagne.layers.SliceLayer(l_forward_1, -1, 1)
 
@@ -483,17 +487,17 @@ class MaltParser:
 	 	for idx, row in enumerate(train_matrix):
 			if idx % 100 == 0:
 				print "training", idx
-			inputs = row
+			inputs = np.array([row])
 			#targets = np.array(self.train_answers)
 			target = self.train_answers[idx]
 			if target == 1:
-				targets = np.matrix([1, 0, 0, 0])
+				targets = [[1, 0, 0, 0]]
 			elif target == 2:
-				targets = np.matrix([0, 1, 0, 0])
+				targets = [[0, 1, 0, 0]]
 			elif target == 3:
-				targets = np.matrix([0, 0, 1, 0])
+				targets = [[0, 0, 1, 0]]
 			elif target == 4:
-				targets = np.matrix([0, 0, 0, 1])
+				targets = [[0, 0, 0, 1]]
 
 			#print targets, targets.shape
 	 		avg_cost = train(inputs, targets)
@@ -523,10 +527,9 @@ class MaltParser:
 					self.add_history_feature_map_for_training()
 					self.build_train_sparse_matrix()
 					# +1 for starting with 1, not 0
-					next_action = np.argmax(probs(self.train_samples.todense())) + 1
+					next_action = np.argmax(probs(np.array([self.train_samples.todense()]))) + 1
 					print next_action
 					#-------------------------------------------------------------------
-					#next_action = 
 
 					if len(self.stack) == 0:
 						self.shift()
