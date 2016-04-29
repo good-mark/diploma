@@ -13,12 +13,19 @@ from sklearn.svm import LinearSVC
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import classification_report
 
+import theano
+import theano.tensor as T
+import lasagne
+
+import array
+import csv
+import os
+
 # ===================================================
 # Constant declaration
 # ===================================================
-#dataset_path = '..\\test_building_train_data_small_15'
-dataset_path = '..\\fix_test'
-#dataset_path = 'C:\Diploma\with_usefull_features\\test'
+dataset_path = '..\\test_building_train_data_small_15'
+#dataset_path = '..\\fix_test'
 SENTENCE_ID = 0
 LEX = 3
 ID = 4
@@ -31,6 +38,10 @@ LEFTARC = 3
 RIGHTARC = 4
 
 IS_ROOT_FEATURE = 'IsRoot'
+
+GRAD_CLIP = 100 # All gradients above this will be clipped
+N_HIDDEN = 512 # Number of units in the two hidden (LSTM) layers
+LEARNING_RATE = .01 # Optimization learning rate
 
 # ===================================================
 # Class for reading data from dataset, preparing it for training.
@@ -91,13 +102,12 @@ class DataKeeper:
 				# if row is not empty
 				if len(row) != 0 and len(row[LEX]) != 0:
 					# do transitions inside one sentence
-					
 					# if token is last one in input, finish data reading
 					if idx == (dataset_len - 1):
 						# filtering the sentences with no root vertex (is it possible? seems to be)
 						if row[PARENT] == '-1':
 							is_cur_sent_content_root = True
-						if is_cur_sent_content_root:
+						if len(current_sentence) >= 5 and is_cur_sent_content_root:
 							# add fictive root vertex in the end of sentence.
 							# Root's parent is ROOT!!!
 							current_sentence.append(row)
@@ -109,6 +119,8 @@ class DataKeeper:
 							self.input.append(list(current_sentence))
 							self.features.extend(list(current_sentence_features))
 							break
+						print "Sentence", idx, "has not root vertex!"
+						break
 
 					# if token is not last one in input,
 					# check if previous token is from the same sentence
@@ -127,7 +139,6 @@ class DataKeeper:
 							self.input.append(list(current_sentence))
 							self.features.extend(list(current_sentence_features))
 							self.sentences_number += 1
-							# TODO: add aux root vertex
 						current_sentence = []
 						current_sentence_features = []
 						is_cur_sent_content_root = False
@@ -210,7 +221,6 @@ class MaltParser:
 		self.stack.append(self.input[self.current_sentence_position][self.current_word_position])
 		self.current_word_position += 1
 
-
 	# ===================================================
 	# A range of auxillary functions adding different kinds of features
 	# filling the history feature-based model.
@@ -280,7 +290,6 @@ class MaltParser:
 				for feature in self.out_verticies[top[ID]][-1][FEATURES:]:
 					self.add_one_feature(feature, current_row, order)
 
-
 	def add_fake_feature(self, order, current_row):
 		self.row.append(current_row)
 		self.col.append(self.feat_count * 10)
@@ -334,6 +343,8 @@ class MaltParser:
 		rrow = np.asarray(self.row)
 		rcol = np.asarray(self.col)
 		self.train_samples = csr_matrix( ( rdata,(rrow,rcol) ) )
+		#self.train_samples = sparse.CSR(rdata, rrow, rcol, (len(self.train_answers), self.feat_count * 10))
+		#rdata, rrow, rcol = sparse.csm_properties(self.train_samples)
 
 	def build_train_samples(self, begin, end):
 		print 'building train samples...'
@@ -349,13 +360,14 @@ class MaltParser:
 			if self.current_sentence_position % 5000 == 0:
 				print self.current_sentence_position
 
+			stop_idx = len(sentence)
 			# do transitions inside one sentence
 			# remember the last vertex is ROOT
 			for idx, word_with_features in enumerate(sentence):
 				self.current_word_position = idx
 				# until right or shift
 				# priority is left > right > reduce > shift
-				while 1:
+				while self.current_word_position < stop_idx:
 					# create history-based feature model instance
 					# and add it to train data
 					self.add_history_feature_map_for_training()
@@ -399,7 +411,7 @@ class MaltParser:
 
 	# For each sentence predict consequence of actions,
 	# parse it using this actions and evaluate result
-	def test(self, begin, end):
+	def test_svm(self, begin, end):
 		general_score = 0
 		self.current_sentence_position = begin #!!!!!!!!!
 
@@ -410,9 +422,11 @@ class MaltParser:
 
 			self.erase_state()
 			score = 0 # count matches in the sentence
+			stop_idx = len(sentence)
+
 			# for each word in the sentence
 			for idx, word_with_features in enumerate(sentence):
-				while 1:
+				while self.current_word_position < stop_idx :
 					self.erase_containers()
 					self.add_history_feature_map_for_training()
 					self.build_train_sparse_matrix()
@@ -461,7 +475,7 @@ class MaltParser:
 		print '!!! accuracy is ', general_score * 1.0 / len(self.input[begin:end])
 
 	# do experiment and count the score
-	def execute_experiment(self, train_part):
+	def execute_svm_experiment(self, train_part):
 		print 'Experiment starting...'
 		train_data_size = int(len(self.input) * train_part) # number of _sentences_
 		self.build_train_samples(0, train_data_size)
@@ -473,10 +487,161 @@ class MaltParser:
 		print 'end training...'
 		self.dump_clf_parameters()
 
-		# test model
 		print 'start testing...'
-		self.test(train_data_size, -2)
-		
+		self.test_svm(train_data_size, -2)
+
+	def construct_targets_for_network(self, target):
+		if target == 1:
+			return [[1, 0, 0, 0]]
+		elif target == 2:
+			return [[0, 1, 0, 0]]
+		elif target == 3:
+			return [[0, 0, 1, 0]]
+		elif target == 4:
+			return [[0, 0, 0, 1]]
+
+	def execute_network_experiment(self, train_part):
+		print 'experiment starting...'
+		train_data_size = int(len(self.input) * train_part) # number of _sentences_
+		mparser.build_train_samples(0, train_data_size)
+		print "number of train samples: ", self.train_samples.shape
+
+		# work with network
+		print("Building network ...")
+   		#help(lasagne.layers.LSTMLayer)
+
+		# ===================================================
+		# Declarate the input/output format for network
+		# ===================================================
+   		#input_var = theano.sparse.csr_matrix(name='inputs', dtype='int16')
+	 	input_var = T.tensor3('inputs')
+	 	target_var = T.matrix('targets')
+	 	train_matrix = self.train_samples.todense()
+	 	print train_matrix.shape[0], train_matrix.shape[1], 'SHAPEEE'
+
+
+		# ===================================================
+		# Declarate the network architecture, layers.
+		# ===================================================
+	 	# (batch size, SEQ_LENGTH, num_features)
+	 	l_in = lasagne.layers.InputLayer(shape=(1, 1, train_matrix.shape[1]), input_var=input_var)
+	 	l_in_drop = lasagne.layers.DropoutLayer(l_in, p=0.3)
+
+		#l_resized = lasagne.layers.ReshapeLayer(l_in_drop, shape=(-1, 1))
+
+	 	# clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients.
+	 	l_forward_1 = lasagne.layers.LSTMLayer(l_in_drop, 4, grad_clipping=GRAD_CLIP,nonlinearity=lasagne.nonlinearities.tanh)
+
+		#l_resized = lasagne.layers.ReshapeLayer(l_forward_1, shape=(-1, 1))
+	 	'''l_forward_2 = lasagne.layers.LSTMLayer(
+	 	 	l_forward_1, N_HIDDEN, grad_clipping=GRAD_CLIP,
+	 	 	nonlinearity=lasagne.nonlinearities.tanh)'''
+
+	 	# The l_forward layer creates an output of dimension (batch_size, SEQ_LENGTH, N_HIDDEN)
+	 	# Since we are only interested in the final prediction, we isolate that quantity and feed it to the next layer.
+	 	# The output of the sliced layer will then be of size (batch_size, N_HIDDEN)
+	 	#l_forward_slice = lasagne.layers.SliceLayer(l_forward_1, -1, 1)
+
+	 	# The sliced output is then passed through the softmax nonlinearity to create probability distribution of the prediction
+	 	# The output of this stage is (batch_size, vocab_size)
+	 	l_out = lasagne.layers.DenseLayer(l_forward_1, num_units=4, W = lasagne.init.Normal(), nonlinearity=lasagne.nonlinearities.softmax)
+
+	 	# lasagne.layers.get_output produces a variable for the output of the net
+	 	network_output = lasagne.layers.get_output(l_out)
+
+	 	# The loss function is calculated as the mean of the (categorical) cross-entropy between the prediction and target.
+	 	cost = T.nnet.categorical_crossentropy(network_output,target_var).mean()
+
+	 	# Retrieve all parameters from the network
+	 	all_params = lasagne.layers.get_all_params(l_out,trainable=True)
+
+	 	# Compute AdaGrad updates for training
+	 	print("Computing updates ...")
+	 	updates = lasagne.updates.adagrad(cost, all_params, LEARNING_RATE)
+
+
+		# ===================================================
+		# Compiling the network functions for training&testing, computing cost.
+		# ===================================================
+	 	print("Compiling functions ...")
+	 	train = theano.function([input_var, target_var], cost, updates=updates, allow_input_downcast=True)
+	 	compute_cost = theano.function([input_var, target_var], cost, allow_input_downcast=True)
+
+	 	# Produce the probability distribution of the prediction
+	 	probs = theano.function([input_var],network_output,allow_input_downcast=True)
+
+
+
+		print "Training ..."
+	 	for idx, row in enumerate(train_matrix):
+			if idx % 1000 == 0:
+				print "training", idx
+			inputs = np.array([row])
+			targets = self.construct_targets_for_network(self.train_answers[idx])
+	 		avg_cost = train(inputs, targets)
+
+		print "Testing..."
+		# For each sentence predict consequence of actions, parse it using this actions and evaluate result
+		general_score = 0
+		self.current_sentence_position = train_data_size #!!!!!!!!!
+
+		# for each sentence in test data
+		for sentence in self.input[train_data_size:-2]:
+		#for sentence in self.input[:train_data_size]:
+			for word in sentence:
+				print word[LEX], word[ID], '!', word[PARENT]
+
+			self.erase_state()
+			score = 0 # count matches in the sentence
+			stop_idx = len(sentence)
+
+			# for each word in the sentence
+			for idx, word_with_features in enumerate(sentence):
+				while self.current_word_position < stop_idx:
+					self.erase_containers()
+					self.add_history_feature_map_for_training()
+					self.build_train_sparse_matrix()
+					# +1 for starting with 1, not 0
+					next_action = np.argmax(probs(np.array([self.train_samples.todense()]))) + 1
+					#print next_action #DEBUG
+
+					if len(self.stack) == 0:
+						self.shift()
+						break
+
+					word = self.input[self.current_sentence_position][self.current_word_position]
+					if next_action == LEFTARC:
+						if word[ID] == self.stack[-1][PARENT]:
+							#print '----------------------yes'
+							score += 1
+						self.left_arc()
+						continue
+
+					elif next_action == RIGHTARC:
+						#print 'exp right'
+						if word[PARENT] == self.stack[-1][ID]:
+							#print '----------------------yes'
+							score += 1
+						self.right_arc()
+						break
+
+					elif next_action == REDUCE:
+						self.reduce()
+						#print 'exp reduce'
+						continue
+
+					elif next_action == SHIFT:
+						self.shift()
+						#print 'exp shift'
+						break
+
+			self.current_sentence_position += 1
+
+			# test and count the score
+			#print 'sent ', self.current_sentence_position, 'score', score
+			general_score += ( score * 1.0 / (stop_idx - 1) )
+		print 'General score ', general_score
+		print '!!! Accuracy is ', general_score * 1.0 / len(self.input[train_data_size:-2])
 
 	def dump_clf_parameters(self):
 		filename = "malt_parser_model.pkl"
@@ -486,5 +651,6 @@ class MaltParser:
 if __name__ == "__main__":
 	mparser = MaltParser()
 	''' You can change the part to be training data	'''
-	train_part = 1.0 / 5 * 4 
-	mparser.execute_experiment(train_part) # some parameters for learning&testing?
+	train_part = 1.0 / 5 * 4
+	# mparser.execute_svm_experiment(train_part)
+	mparser.execute_network_experiment(train_part) # some parameters for learning&testing?
