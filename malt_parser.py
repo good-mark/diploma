@@ -27,8 +27,8 @@ import time
 # ===================================================
 # Constant declaration
 # ===================================================
-#dataset_path = '.\\test_building_train_data_small_15'
-dataset_path = '.\\fix_test'
+dataset_path = '.\\test_building_train_data_small_15'
+#dataset_path = '.\\fix_test'
 SENTENCE_ID = 0
 LEX = 3
 ID = 4
@@ -582,7 +582,7 @@ class MaltParser:
 		#l_resized = lasagne.layers.ReshapeLayer(l_in_drop, shape=(-1, 1))
 
 	 	# clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients.
-	 	l_forward_1 = lasagne.layers.LSTMLayer(l_in_drop, 4, grad_clipping=GRAD_CLIP,nonlinearity=lasagne.nonlinearities.tanh)
+	 	l_forward_1 = lasagne.layers.LSTMLayer(l_in_drop, 30, grad_clipping=GRAD_CLIP,nonlinearity=lasagne.nonlinearities.tanh)
 
 		#l_resized = lasagne.layers.ReshapeLayer(l_forward_1, shape=(-1, 1))
 	 	'''l_forward_2 = lasagne.layers.LSTMLayer(
@@ -626,7 +626,7 @@ class MaltParser:
 
 		print "Training ..."
 	 	for idx, row in enumerate(train_matrix):
-			#_startTime1 = time.time()
+			_startTime1 = time.time()
 			if idx % 1000 == 0:
 				print "training", idx
 			inputs = np.array(row).reshape([1,1,500])
@@ -634,8 +634,9 @@ class MaltParser:
 			targets = self.construct_targets_for_network(self.train_answers[idx])
 	 		#_startTime2 = time.time()
 	 		avg_cost = train(inputs, targets)
-			#_startTime3 = time.time()
-			#print "sum time", _startTime3 - _startTime1, "reading", _startTime2 - _startTime1
+			_startTime3 = time.time()
+			if idx == 0:
+				print "sum time", _startTime3 - _startTime1#, "reading", _startTime2 - _startTime1
 
 		print "Testing..."
 		# For each sentence predict consequence of actions, parse it using this actions and evaluate result
