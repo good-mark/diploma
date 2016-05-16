@@ -582,7 +582,7 @@ class MaltParser:
 		#l_resized = lasagne.layers.ReshapeLayer(l_in_drop, shape=(-1, 1))
 
 	 	# clip the gradients at GRAD_CLIP to prevent the problem of exploding gradients.
-	 	l_forward_1 = lasagne.layers.LSTMLayer(l_in_drop, 30, grad_clipping=GRAD_CLIP,nonlinearity=lasagne.nonlinearities.tanh)
+	 	l_forward_1 = lasagne.layers.LSTMLayer(l_in_drop, 100, grad_clipping=GRAD_CLIP,nonlinearity=lasagne.nonlinearities.tanh)
 
 		#l_resized = lasagne.layers.ReshapeLayer(l_forward_1, shape=(-1, 1))
 	 	'''l_forward_2 = lasagne.layers.LSTMLayer(
