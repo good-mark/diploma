@@ -27,7 +27,8 @@ import time
 # ===================================================
 # Constant declaration
 # ===================================================
-dataset_path = '.\\test_building_train_data_small_15'
+dataset_path = '.\\7621'
+#dataset_path = '.\\test_building_train_data_small_15'
 #dataset_path = '.\\fix_test'
 SENTENCE_ID = 0
 LEX = 3
