@@ -13,6 +13,8 @@ from collections import defaultdict
 from sklearn.svm import LinearSVC
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import classification_report
+from sklearn.cross_validation import train_test_split
+import random
 
 import theano
 import theano.tensor as T
@@ -373,6 +375,7 @@ class MaltParser:
 
 			# will use first half of data in range from begin index to end index
 			print 'size of training data is ', end - begin, 'sentences'
+			random.shuffle(self.input)
 
 			self.current_sentence_position = begin
 			for sentence in self.input[begin:end]:
@@ -701,7 +704,7 @@ class MaltParser:
 		print 'General score ', general_score
 		print '!!! Accuracy is ', general_score * 1.0 / len(self.input[train_data_size:-2])
 
-
+	'''
 	def execute_simple_network_experiment(self, train_part):
 		print 'experiment starting...'
 		train_data_size = int(len(self.input) * train_part) # number of _sentences_
@@ -837,7 +840,7 @@ class MaltParser:
 			general_score += ( score * 1.0 / (stop_idx - 1) )
 		print 'General score ', general_score
 		print '!!! Accuracy is ', general_score * 1.0 / len(self.input[train_data_size:-2])
-
+	'''
 	def dump_clf_parameters(self):
 		filename = "malt_parser_model.pkl"
 		with open(filename, "wb") as f:
@@ -846,7 +849,7 @@ class MaltParser:
 if __name__ == "__main__":
 	mparser = MaltParser()
 	''' You can change the part to be training data	'''
-	train_part = 1.0 / 5 * 4
+	train_part = 4.0 / 5
 
 	# By the stage self.train_data is filled, self.important_features is revealed.
 	mparser.select_features()
