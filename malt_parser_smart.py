@@ -31,7 +31,7 @@ import time
 # ===================================================
 #dataset_path = '.\\7621'
 #dataset_path = '.\\test_building_train_data_small_15'
-dataset_path = '.\\data_without\csv_data_smart'
+dataset_path = '.\\data_without\csv_data_smart_test'
 SENTENCE_ID = 0
 LEX = 3
 ID = 4
@@ -90,7 +90,7 @@ class DataKeeper:
 		return dataset_len
 
 	def get_root(self, sent_number):
-		return [sent_number, '0', 'ROOT', 'ROOT', '-1', '-2', IS_ROOT_FEATURE]
+		return [sent_number, '0', 'ROOT', 'ROOT', '-1', '-2', IS_ROOT_FEATURE, 1.0]
 
 	def load_file(self, fullname):
 		# need to know the size of file
@@ -239,7 +239,7 @@ class MaltParser:
 		feat_num = self.data_keeper.get_feat_num_by_name(feature)
 		self.row.append(current_row)
 		self.col.append(feat_num + self.feat_count * order)
-		self.data.append(probability)
+		self.data.append(float(probability))
 
 	# Feat_num is a flag if we want use smart feature map constructor or usual.
 	# Smart constructor selects only top 500 important features, after feature selection.
@@ -316,7 +316,7 @@ class MaltParser:
 	def add_fake_feature(self, order, current_row):
 		self.row.append(current_row)
 		self.col.append(self.feat_count * 10)
-		self.data.append(1)
+		self.data.append(1.0)
 
 	# add history feature map in sparse matrix
 	# TODO: divide features depend on its kind (morph, lex, pos, etc),
@@ -363,7 +363,7 @@ class MaltParser:
 
 	# some auxillary function
 	def build_train_sparse_matrix(self):
-		rdata = np.asarray(self.data)
+		rdata = np.asarray(self.data, dtype=float)
 		rrow = np.asarray(self.row)
 		rcol = np.asarray(self.col)
 		self.train_samples = csr_matrix( ( rdata,(rrow,rcol) ) )
