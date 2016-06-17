@@ -31,7 +31,7 @@ import time
 # ===================================================
 #dataset_path = '.\\7621'
 #dataset_path = '.\\test_building_train_data_small_15'
-dataset_path = '.\\data_without\csv_data_smart_test'
+dataset_path = '.\\data_without\csv_data_smart'
 SENTENCE_ID = 0
 LEX = 3
 ID = 4
