@@ -385,7 +385,7 @@ class MaltParser:
 
 			# will use first half of data in range from begin index to end index
 			print 'size of training data is ', end - begin, 'sentences'
-			#random.shuffle(self.input) #######################################################RANDOMIZING
+			random.shuffle(self.input) #######################################################RANDOMIZING
 
 			self.current_sentence_position = begin
 			for sentence in self.input[begin:end]:
