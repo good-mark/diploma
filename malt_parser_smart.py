@@ -31,7 +31,7 @@ import time
 # ===================================================
 #dataset_path = '.\\7621'
 #dataset_path = '.\\test_building_train_data_small_15'
-dataset_path = '.\\data_without\csv_data_smart'
+dataset_path = '.\\data_without\csv_data_smart_test'
 SENTENCE_ID = 0
 LEX = 3
 ID = 4
@@ -48,6 +48,8 @@ IS_ROOT_FEATURE = 'IsRoot'
 GRAD_CLIP = 100 # All gradients above this will be clipped
 N_HIDDEN = 512 # Number of units in the two hidden (LSTM) layers
 LEARNING_RATE = .01 # Optimization learning rate
+
+FEATURES_NUM = -1
 
 # ===================================================
 # Class for reading data from dataset, preparing it for training.
@@ -376,7 +378,7 @@ class MaltParser:
 			print self.train_samples.shape[0]
 			end = self.train_samples.shape[0] * end / len(self.input)
 			self.train_samples = self.train_samples[begin:end]
-			self.filter_features()
+			#self.filter_features()
 			self.train_answers = self.train_answers[begin:end]
 		else:
 			self.erase_containers() # init containers
@@ -451,6 +453,8 @@ class MaltParser:
 				for feat_num in self.important_features:
 					new_raw.append(raw[feat_num])
 				self.train_samples.append(new_raw)
+		else:
+			self.train_samples = self.train_samples.toarray()
 
 	def select_features(self):
 		self.build_train_samples(0, len(self.input)-1)
@@ -506,7 +510,8 @@ class MaltParser:
 		# Declarate the network architecture, layers.
 		# ===================================================
 	 	# (batch size, SEQ_LENGTH, num_features)
-	 	l_in = lasagne.layers.InputLayer(shape=(1, 1, 500), input_var=input_var)
+		DIMENTION3 = len(train_matrix[0])
+	 	l_in = lasagne.layers.InputLayer(shape=(1, 1, DIMENTION3), input_var=input_var)
 	 	l_in_drop = lasagne.layers.DropoutLayer(l_in, p=0.3)
 
 		#l_resized = lasagne.layers.ReshapeLayer(l_in_drop, shape=(-1, 1))
@@ -561,9 +566,9 @@ class MaltParser:
 		print "Training ..."
 	 	for idx, row in enumerate(train_matrix):
 			_startTime1 = time.time()
-			if idx % 1000 == 0:
+			if idx % 10 == 0:
 				print "training", idx
-			inputs = np.array(row).reshape([1,1,500])
+			inputs = np.array(row).reshape([1, 1, DIMENTION3])
 			#print type(inputs)#, inputs.shape
 			targets = self.construct_targets_for_network(self.train_answers[idx])
 	 		#_startTime2 = time.time()
@@ -593,7 +598,7 @@ class MaltParser:
 					self.add_history_feature_map_for_training()
 					self.build_train_sparse_matrix()
 					# +1 for starting with 1, not 0
-					next_action = np.argmax(probs(np.array(self.train_samples).reshape([1,1,500]))) + 1
+					next_action = np.argmax(probs(np.array(self.train_samples).reshape([1, 1, DIMENTION3]))) + 1
 					#print next_action #DEBUG
 
 					if len(self.stack) == 0:
@@ -645,5 +650,5 @@ if __name__ == "__main__":
 	train_part = 4.0 / 5
 
 	# By the stage self.train_data is filled, self.important_features is revealed.
-	mparser.select_features()
+	#mparser.select_features()
 	mparser.execute_network_experiment(train_part)
