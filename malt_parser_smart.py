@@ -486,8 +486,9 @@ class MaltParser:
 		elif target == 4:
 			return [[0, 0, 0, 1]]
 
-	def execute_network_experiment(self, train_part):
+	def execute_network_experiment(self, train_part, flag):
 		print 'experiment starting...'
+
 		train_data_size = int(len(self.input) * train_part) # number of _sentences_
 		self.build_train_samples(0, train_data_size)
 		print "number of train samples: ", len(self.train_samples)
@@ -562,6 +563,9 @@ class MaltParser:
 	 	probs = theano.function([input_var],network_output,allow_input_downcast=True)
 
 
+		if flag:
+			all_param_values = self.load_param_from_file()
+			set_all_param_values(l_out, all_param_values)
 
 		print "Training ..."
 	 	for idx, row in enumerate(train_matrix):
@@ -639,10 +643,18 @@ class MaltParser:
 		print 'General score ', general_score
 		print '!!! Accuracy is ', general_score * 1.0 / len(self.input[train_data_size:-2])
 
-	def dump_clf_parameters(self):
-		filename = "malt_parser_model.pkl"
+		if not flag:
+			self.dump_clf_parameters(get_all_param_values(l_out))
+
+	def dump_clf_parameters(self, obj):
+		filename = "malt_parser_model"
 		with open(filename, "wb") as f:
-			s = pickle.dump(self.svm_clf, f, protocol=2)
+			s = pickle.dump(obj, f, protocol=2)
+
+	def load_param_from_file(self):
+		filename = "malt_parser_model"
+		with open(filename, "rb") as f:
+			return pickle.load(f)
 
 if __name__ == "__main__":
 	mparser = MaltParser()
@@ -651,4 +663,4 @@ if __name__ == "__main__":
 
 	# By the stage self.train_data is filled, self.important_features is revealed.
 	#mparser.select_features()
-	mparser.execute_network_experiment(train_part)
+	mparser.execute_network_experiment(train_part, 0)
